@@ -1,7 +1,12 @@
 import React, { useState, useMemo } from "react";
 import axios from "axios";
 import { fetchUSDPrices } from "../services/apis";
-import { validateContractAddress } from "./ValidationFn";
+import {
+  convertHexToEther,
+  convertScientificToBigNumber,
+  isScientificNotation,
+  validateContractAddress,
+} from "./ValidationFn";
 
 const TokenBalance = React.memo(() => {
   const [address, setAddress] = useState("");
@@ -29,9 +34,26 @@ const TokenBalance = React.memo(() => {
 
   const tokenAddresses = useMemo(
     () => ({
-      wETH: process.env.REACT_APP_WETH_ADDRESS,
-      USDC: process.env.REACT_APP_USDC_ADDRESS,
-      USDT: process.env.REACT_APP_USDT_ADDRESS,
+      ethereum: {
+        wETH: process.env.REACT_APP_ETH_WETH_ADDRESS,
+        USDC: process.env.REACT_APP_ETH_USDC_ADDRESS,
+        USDT: process.env.REACT_APP_ETH_USDT_ADDRESS,
+      },
+      arbitrum: {
+        wETH: process.env.REACT_APP_ARB_WETH_ADDRESS,
+        USDC: process.env.REACT_APP_ARB_USDC_ADDRESS,
+        USDT: process.env.REACT_APP_ARB_USDT_ADDRESS,
+      },
+      optimism: {
+        wETH: process.env.REACT_APP_OPT_WETH_ADDRESS,
+        USDC: process.env.REACT_APP_OPT_USDC_ADDRESS,
+        USDT: process.env.REACT_APP_OPT_USDT_ADDRESS,
+      },
+      base: {
+        wETH: process.env.REACT_APP_BASE_WETH_ADDRESS,
+        USDC: process.env.REACT_APP_BASE_USDC_ADDRESS,
+        USDT: process.env.REACT_APP_BASE_USDT_ADDRESS,
+      },
     }),
     []
   );
@@ -50,6 +72,7 @@ const TokenBalance = React.memo(() => {
       const tokenBalances = await Promise.all(
         Object.keys(publicRPCs).map(async (chain) => {
           const rpcUrl = publicRPCs[chain];
+          const tokens = tokenAddresses[chain] || tokenAddresses["ethereum"];
 
           const ethBalanceResponse = await axios.post(rpcUrl, {
             jsonrpc: "2.0",
@@ -57,14 +80,14 @@ const TokenBalance = React.memo(() => {
             params: [address, "latest"],
             id: 1,
           });
-
-          const ethBalanceHex = ethBalanceResponse.data.result || "0x0";
-          const ethBalanceInEther = parseInt(ethBalanceHex, 16) / 1e18;
-          const ethUSDValue = ethBalanceInEther * usdPrices.ETH;
+          const ethBalanceHex = ethBalanceResponse.data.result;
+          const ethBalanceInEther = convertHexToEther(ethBalanceHex).toString();
+          const ethUSDValue = Number(ethBalanceInEther) * Number(usdPrices.ETH);
 
           const tokenBalances = await Promise.all(
-            Object.keys(tokenAddresses).map(async (token) => {
-              const tokenContract = tokenAddresses[token];
+            Object.keys(tokens).map(async (token) => {
+              const tokenContract = tokens[token];
+
               const tokenBalanceResponse = await axios.post(rpcUrl, {
                 jsonrpc: "2.0",
                 method: "eth_call",
@@ -78,9 +101,11 @@ const TokenBalance = React.memo(() => {
                 id: 1,
               });
 
-              const tokenBalanceHex = tokenBalanceResponse.data.result || "0x0";
-              const tokenBalance = parseInt(tokenBalanceHex, 16) / 1e18;
-              const tokenUSDValue = tokenBalance * usdPrices[token];
+              const tokenBalanceHex = tokenBalanceResponse.data.result;
+              const tokenBalance =
+                convertHexToEther(tokenBalanceHex).toString();
+              const tokenUSDValue =
+                Number(tokenBalance) * Number(usdPrices[token]);
 
               return {
                 symbol: token,
@@ -112,23 +137,24 @@ const TokenBalance = React.memo(() => {
 
         totalValue += chainData.ethUSDValue;
 
-        chainData.tokenBalances
-          .filter((token) => token.balance > 0)
-          .forEach((token) => {
-            chainResults.push({
-              chain: chainData.chain,
-              symbol: token.symbol,
-              balance: token.balance,
-              usdValue: token.usdValue,
-            });
-
-            totalValue += token.usdValue;
+        chainData.tokenBalances.forEach((token) => {
+          chainResults.push({
+            chain: chainData.chain,
+            symbol: token.symbol,
+            balance: token.balance,
+            usdValue: token.usdValue,
           });
+
+          totalValue += token.usdValue;
+        });
 
         return chainResults;
       });
 
-      setBalances(result);
+      const newResult =
+        result.length > 0 && result.filter((item) => Number(item?.balance) > 0);
+
+      setBalances(newResult);
       setTotalUSDValue(totalValue);
     } catch (error) {
       console.error("Error fetching balances:", error);
@@ -183,11 +209,14 @@ const TokenBalance = React.memo(() => {
       <ul>
         {balances.map((b, index) => (
           <li key={index}>
-            {String(b.chain).toUpperCase()} - {b.symbol}: {b.balance}
+            {String(b.chain).toUpperCase()} - {b.symbol}:{" "}
+            {isScientificNotation(b.balance)
+              ? convertScientificToBigNumber(b.balance).toFixed()
+              : b.balance}
           </li>
         ))}
       </ul>
-      {balances.length > 0 && totalUSDValue > 0 && (
+      {balances.length > 0 && totalUSDValueDisplay > 0 && (
         <h3>Total USD Value: ${totalUSDValueDisplay}</h3>
       )}
     </>

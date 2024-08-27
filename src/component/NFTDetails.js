@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import axios from "axios";
-import { getNFTTransactions } from "../services/apis";
+import { checkTokenType, getNFTMetadata } from "../services/apis";
 import { validateContractAddress, validateTokenId } from "./ValidationFn";
 
 const NFTDetails = React.memo(() => {
@@ -46,27 +45,20 @@ const NFTDetails = React.memo(() => {
     setNftData(null);
 
     try {
-      const response = await getNFTTransactions(contractAddress, tokenId);
+      const response = await getNFTMetadata(contractAddress, tokenId);
+      const isERC1155 = (await checkTokenType(contractAddress)) || "";
 
-      if (response.data.status !== "1") {
-        throw new Error("NFT not found or invalid inputs");
+      if (!response) {
+        throw new Error("NFT metadata not found or invalid inputs");
       }
 
-      const nftDetails = response.data.result[0];
-      const isERC1155 = nftDetails.erc1155;
-
-      let metadata = {};
-      if (nftDetails.tokenURI) {
-        const metadataResponse = await axios.get(nftDetails.tokenURI);
-        metadata = metadataResponse.data;
-      }
+      const { name, description, image } = response;
 
       setNftData({
-        owner: nftDetails.to,
-        collectionName: nftDetails.tokenName || "Unknown Collection",
-        nftName: metadata.name || `Token #${tokenId}`,
-        imageUrl: metadata.image || "",
+        nftName: name || `Token #${tokenId}`,
+        imageUrl: image || "",
         isERC1155,
+        description: description || "No description available",
       });
     } catch (err) {
       console.error("Error fetching NFT details:", err);
@@ -129,17 +121,10 @@ const NFTDetails = React.memo(() => {
         <div className="col-lg-6 wow fadeInRight" data-wow-delay="0.2s">
           {nftData && (
             <div>
-              <h3>
-                {nftData.collectionName} - {nftData.nftName}
-              </h3>
-              <p>
-                Owner:
-                {nftData.owner}
-              </p>
+              <h3>{nftData.nftName}</h3>
+              <p>{nftData.isERC1155}</p>
               {nftData.imageUrl && (
                 <div>
-                  <h4>Image:</h4>
-
                   {nftData.imageUrl.endsWith(".mp4") ? (
                     <video src={nftData.imageUrl} controls />
                   ) : (
@@ -151,7 +136,6 @@ const NFTDetails = React.memo(() => {
                   )}
                 </div>
               )}
-              <p>NFT Type: {nftData.isERC1155 ? "ERC-1155" : "ERC-721"}</p>
             </div>
           )}
         </div>
