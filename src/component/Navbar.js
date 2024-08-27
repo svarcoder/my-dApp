@@ -7,9 +7,11 @@ const Navbar = () => {
 
   return (
     <nav className="navbar navbar-expand-lg fixed-top navbar-light px-4 px-lg-5 py-3 py-lg-0">
-      <a href="index.html" className="navbar-brand p-0">
+      <Link className="navbar-brand p-0" to={"/"}>
+        {" "}
         <h1 className="display-6 text-primary m-0">Logo</h1>
-      </a>
+      </Link>
+
       <button
         className="navbar-toggler"
         type="button"
