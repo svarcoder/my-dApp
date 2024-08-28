@@ -15,6 +15,7 @@ const TokenBalance = React.memo(() => {
   const [error, setError] = useState(null);
   const [totalUSDValue, setTotalUSDValue] = useState(0);
   const [isValid, setIsValid] = useState(true);
+  const [sortOrder, setSortOrder] = useState("asc");
 
   const handleChange = (e) => {
     const value = e.target.value;
@@ -104,8 +105,11 @@ const TokenBalance = React.memo(() => {
               const tokenBalanceHex = tokenBalanceResponse.data.result;
               const tokenBalance =
                 convertHexToEther(tokenBalanceHex).toString();
+              const forCheckUSDC = isScientificNotation(tokenBalance)
+                ? convertScientificToBigNumber(tokenBalance).toFixed()
+                : tokenBalance;
               const tokenUSDValue =
-                Number(tokenBalance) * Number(usdPrices[token]);
+                Number(forCheckUSDC) * Number(usdPrices[token]);
 
               return {
                 symbol: token,
@@ -176,6 +180,19 @@ const TokenBalance = React.memo(() => {
     [totalUSDValue]
   );
 
+  const sortBalances = () => {
+    const sortedBalances = [...balances].sort((a, b) => {
+      if (sortOrder === "asc") {
+        return a.usdValue - b.usdValue;
+      } else {
+        return b.usdValue - a.usdValue;
+      }
+    });
+
+    setBalances(sortedBalances);
+    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+  };
+
   return (
     <>
       <input
@@ -193,7 +210,13 @@ const TokenBalance = React.memo(() => {
       >
         {loading ? "Loading..." : "Get Balances"}
       </button>
-
+      <button
+        onClick={sortBalances}
+        disabled={loading}
+        className="btn btn-light border border-primary rounded-pill text-primary py-2 px-4 me-4 mb-4"
+      >
+        Sort USD ({sortOrder === "asc" ? "Ascending" : "Descending"})
+      </button>
       <button
         onClick={clearData}
         disabled={loading}
@@ -212,7 +235,8 @@ const TokenBalance = React.memo(() => {
             {String(b.chain).toUpperCase()} - {b.symbol}:{" "}
             {isScientificNotation(b.balance)
               ? convertScientificToBigNumber(b.balance).toFixed()
-              : b.balance}
+              : b.balance}{" "}
+            - ${Number(b.usdValue).toFixed(5)}
           </li>
         ))}
       </ul>

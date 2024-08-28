@@ -6,7 +6,7 @@ export const isScientificNotation = (value) => {
 };
 
 export const convertScientificToBigNumber = (scientificNotation) => {
-  return new BigNumber(scientificNotation);
+  return new BigNumber(scientificNotation).multipliedBy(new BigNumber(1e12));
 };
 
 export const convertHexToEther = (hexValue) => {
