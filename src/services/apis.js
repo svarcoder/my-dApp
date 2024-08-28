@@ -1,5 +1,4 @@
 import axios from "axios";
-import { ethers } from "ethers";
 
 // Function to fetch USD value for Coingeko
 export const fetchUSDPrices = async () => {
@@ -29,68 +28,64 @@ const convertIPFSToHTTP = (url) => {
 };
 
 // Function to fetch NFT transactions from Etherscan API
-export const getNFTMetadata = async (contractAddress, tokenId) => {
+const BITQUERY_API_URL = "https://streaming.bitquery.io/graphql";
+
+export const fetchNFTData = async (contractAddress, tokenId) => {
+  const query = `
+    query MyQuery {
+      EVM(dataset: archive, network: eth) {
+        Transfers(
+          where: {Transfer: {Currency: {SmartContract: {is: "${contractAddress}"}}, Id: {eq: "${tokenId}"}}}
+          limit: {count: 1, offset: 0}
+          orderBy: {descending: Block_Number}
+        ) {
+          Transfer {
+            Currency {
+              SmartContract
+              Name
+              Decimals
+              Fungible
+              HasURI
+              Symbol
+            }
+            Id
+            URI
+            Data
+            owner: Receiver
+          }
+        }
+      }
+    }
+  `;
+
   try {
-    const provider = new ethers.JsonRpcProvider(
-      `https://eth-mainnet.alchemyapi.io/v2/${process.env.REACT_APP_ALCHYME_KEY}`
+    const response = await axios.post(
+      BITQUERY_API_URL,
+      { query },
+      {
+        headers: {
+          "X-API-KEY": process.env.REACT_APP_BITQUERY_API_KEY,
+          Authorization: `Bearer ${process.env.REACT_APP_BITQUERY_TOKEN_KEY}`,
+        },
+      }
+    );
+    const data = response.data.data;
+    const metadataResponse = await axios.get(
+      convertIPFSToHTTP(data?.EVM?.Transfers[0]?.Transfer?.URI)
     );
 
-    const abi = [
-      "function tokenURI(uint256 _tokenId) external view returns (string memory)",
-    ];
-
-    const contract = new ethers.Contract(contractAddress, abi, provider);
-
-    const tokenURI = await contract.tokenURI(tokenId);
-
-    const metadataURL = convertIPFSToHTTP(tokenURI);
-
-    const metadataResponse = await axios.get(metadataURL);
-
-    const { name, description, image } = metadataResponse.data;
-
+    const { image } = metadataResponse.data;
     const imageURL = convertIPFSToHTTP(image);
 
-    return {
-      name,
-      description,
-      image: imageURL,
-    };
-  } catch (error) {
-    console.error("Error fetching NFT metadata:", error);
-    throw error;
-  }
-};
-
-export const checkTokenType = async (contractAddress) => {
-  const ERC721_INTERFACE_ID = "0x80ac58cd";
-  const ERC1155_INTERFACE_ID = "0xd9b67a26";
-
-  const provider = new ethers.JsonRpcProvider(
-    `https://eth-mainnet.alchemyapi.io/v2/${process.env.REACT_APP_ALCHYME_KEY}`
-  );
-  const contract = new ethers.Contract(
-    contractAddress,
-    [
-      "function supportsInterface(bytes4 interfaceID) external view returns (bool)",
-    ],
-    provider
-  );
-
-  try {
-    const isERC721 = await contract.supportsInterface(ERC721_INTERFACE_ID);
-    if (isERC721) {
-      return "ERC-721";
+    if (data?.EVM?.Transfers[0]?.Transfer) {
+      return {
+        data: data?.EVM?.Transfers[0]?.Transfer,
+        metadataResponse: imageURL,
+      };
+    } else {
+      throw new Error("No data found");
     }
-
-    const isERC1155 = await contract.supportsInterface(ERC1155_INTERFACE_ID);
-    if (isERC1155) {
-      return "ERC-1155";
-    }
-
-    return "Unknown";
   } catch (error) {
-    console.error("Error checking token type:", error);
-    throw error;
+    throw new Error(`API request failed: ${error.message}`);
   }
 };

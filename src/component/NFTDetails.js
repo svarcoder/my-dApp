@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { checkTokenType, getNFTMetadata } from "../services/apis";
+import { fetchNFTData } from "../services/apis";
 import { validateContractAddress, validateTokenId } from "./ValidationFn";
 
 const NFTDetails = React.memo(() => {
@@ -45,21 +45,13 @@ const NFTDetails = React.memo(() => {
     setNftData(null);
 
     try {
-      const response = await getNFTMetadata(contractAddress, tokenId);
-      const isERC1155 = (await checkTokenType(contractAddress)) || "";
+      const details = await fetchNFTData(contractAddress, tokenId);
 
-      if (!response) {
+      if (!details) {
         throw new Error("NFT metadata not found or invalid inputs");
       }
 
-      const { name, description, image } = response;
-
-      setNftData({
-        nftName: name || `Token #${tokenId}`,
-        imageUrl: image || "",
-        isERC1155,
-        description: description || "No description available",
-      });
+      setNftData(details);
     } catch (err) {
       console.error("Error fetching NFT details:", err);
       setError("Failed to fetch NFT details. Please check your inputs.");
@@ -119,18 +111,24 @@ const NFTDetails = React.memo(() => {
         </div>
 
         <div className="col-lg-6 wow fadeInRight" data-wow-delay="0.2s">
-          {nftData && (
+          {nftData?.data && (
             <div>
-              <h3>{nftData.nftName}</h3>
-              <p>{nftData.isERC1155}</p>
-              {nftData.imageUrl && (
+              <h3>
+                {nftData?.data?.Currency?.Name}-
+                {nftData?.data?.Currency?.Symbol}
+              </h3>
+              <p>{nftData?.data.owner}</p>
+              <p>
+                {nftData?.data?.Currency?.Fungible ? "ERC-1155" : "ERC-721"}
+              </p>
+              {nftData?.metadataResponse && (
                 <div>
-                  {nftData.imageUrl.endsWith(".mp4") ? (
-                    <video src={nftData.imageUrl} controls />
+                  {nftData?.metadataResponse.endsWith(".mp4") ? (
+                    <video src={nftData?.metadataResponse} controls />
                   ) : (
                     <img
-                      src={nftData.imageUrl}
-                      alt={nftData.nftName}
+                      src={nftData?.metadataResponse}
+                      alt={nftData?.metadataResponse}
                       style={{ maxWidth: "300px" }}
                     />
                   )}
